@@ -5,12 +5,13 @@ import types
 
 sel = selectors.DefaultSelector()
 
-SOCKET_LIST = []
+SOCKETS_LIST = []
+
 
 def accept_wrapper(sock):
     conn, addr = sock.accept()
     print(f"Accepted new client {addr[0]}:{addr[1]}")
-    SOCKET_LIST.append(conn)
+    SOCKETS_LIST.append(conn)
     conn.setblocking(False)
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
     events = selectors.EVENT_READ | selectors.EVENT_WRITE
@@ -27,15 +28,17 @@ def service_connection(key, mask):
             data.outb += recv_data
         else:
             print(f"Closing connection to {data.addr[0]}:{data.addr[1]}")
+            if sock in SOCKETS_LIST:
+                SOCKETS_LIST.remove(sock)
             sel.unregister(sock)
             sock.close()
     if mask & selectors.EVENT_WRITE:
         if data.outb:
             print(f"Sending {data.outb!r} to all clients")
-            for client in SOCKET_LIST:
+            for client in SOCKETS_LIST:
                 if client != sock:
                     sent = client.send(data.outb)
-                    data.outb = data.outb[sent:]
+            data.outb = ''
 
 
 def main(HOST, PORT):

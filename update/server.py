@@ -35,10 +35,11 @@ def service_connection(key, mask):
     if mask & selectors.EVENT_WRITE:
         if data.outb:
             print(f"Sending {data.outb!r} to all clients")
+            sent = 0
             for client in SOCKETS_LIST:
                 if client != sock:
                     sent = client.send(data.outb)
-            data.outb = ''
+            data.outb = data.outb[sent:]
 
 
 def main(HOST, PORT):

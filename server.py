@@ -8,24 +8,35 @@ sel = selectors.DefaultSelector()
 SOCKETS_LIST = []
 
 
-def broadcast_new_join(sock):
-    username = sock.recv(2048)
-    join_msg = f'{username.decode()} joined the server'
+def broadcast_new_join(sock, username):
+    SOCKETS_LIST.append((sock, username))
+    join_msg = f'{username} joined the server'
     print(join_msg)
-    for client in SOCKETS_LIST:
+    for client, _ in SOCKETS_LIST:
         if client != sock:
             client.send(join_msg.encode())
 
 
+def check_username(sock) -> str:
+    username = sock.recv(2048)
+    for _, u in SOCKETS_LIST:
+        if username.decode() == u:
+            sock.send(b'Username already taken! Closing the connection...')
+            sock.close()
+            return ''
+    return f'{username.decode()}'
+
+
 def accept_wrapper(sock):
     conn, addr = sock.accept()
-    print(f"Accepted new client {addr[0]}:{addr[1]}")
-    SOCKETS_LIST.append(conn)
-    broadcast_new_join(conn)
-    conn.setblocking(False)
-    data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
-    events = selectors.EVENT_READ | selectors.EVENT_WRITE
-    sel.register(conn, events, data=data)
+    username = check_username(conn)
+    if username != '':
+        print(f"Accepted new client {addr[0]}:{addr[1]}")
+        broadcast_new_join(conn, username)
+        conn.setblocking(False)
+        data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
+        events = selectors.EVENT_READ | selectors.EVENT_WRITE
+        sel.register(conn, events, data=data)
 
 
 def service_connection(key, mask):
@@ -46,7 +57,7 @@ def service_connection(key, mask):
         if data.outb and len(SOCKETS_LIST) != 1:
             print(f"Sending {data.outb!r} to all clients")
             sent = 0
-            for client in SOCKETS_LIST:
+            for client, _ in SOCKETS_LIST:
                 if client != sock:
                     sent = client.send(data.outb)
             data.outb = data.outb[sent:]
